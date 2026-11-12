@@ -5,503 +5,451 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Floral Katana</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #0b0718; overflow: hidden; }
-  canvas { display: block; width: 100vw; height: 100vh; }
+  html, body { margin: 0; height: 100%; background: #0b0418; overflow: hidden; }
+  canvas {
+    position: fixed; inset: 0; width: 100vw; height: 100vh; display: block;
+    image-rendering: pixelated; image-rendering: crisp-edges;
+    cursor: grab; touch-action: none;
+  }
+  canvas.dragging { cursor: grabbing; }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <script>
 (() => {
+  'use strict';
   const canvas = document.getElementById('c');
   const ctx = canvas.getContext('2d');
-  const TAU = Math.PI * 2;
-  const rand = (a, b) => a + Math.random() * (b - a);
-  const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
-  const easeOutBack = x => 1 + 2.70158 * Math.pow(x - 1, 3) + 1.70158 * Math.pow(x - 1, 2);
-  const easeInOut = x => x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
 
-  /* ---------- sprites ---------- */
-
-  const PALETTES = {
-    white:   { inner: '#f7a8c4', mid: '#fff1f6', outer: '#ffffff', core: '#e0607f', stamen: '#ffd86b' },
-    pale:    { inner: '#f284ad', mid: '#ffd9e6', outer: '#fff0f5', core: '#d9507a', stamen: '#ffd86b' },
-    pink:    { inner: '#e0528a', mid: '#ffa9c8', outer: '#ffd3e2', core: '#c23a6c', stamen: '#ffe08a' },
-    deep:    { inner: '#b81f5c', mid: '#f0679a', outer: '#ff9ebf', core: '#8f1245', stamen: '#ffe08a' },
-    crimson: { inner: '#5c0a26', mid: '#a3173f', outer: '#d43b62', core: '#3d0518', stamen: '#ffc94d' },
-    plum:    { inner: '#170a26', mid: '#3a1a52', outer: '#5d2f7a', core: '#0d0518', stamen: '#e9b6ff' },
-    gold:    { inner: '#a8641a', mid: '#f0b842', outer: '#ffe9a3', core: '#8a4a10', stamen: '#fff6d0' }
-  };
-
-  function petalPath(g, r) {
-    g.beginPath();
-    g.moveTo(0, 0);
-    g.bezierCurveTo(-0.58 * r, -0.25 * r, -0.52 * r, -0.86 * r, -0.13 * r, -0.99 * r);
-    g.lineTo(0, -0.85 * r);
-    g.lineTo(0.13 * r, -0.99 * r);
-    g.bezierCurveTo(0.52 * r, -0.86 * r, 0.58 * r, -0.25 * r, 0, 0);
-    g.closePath();
-  }
-
-  function makeCanvas(size) {
-    const c = document.createElement('canvas');
-    c.width = c.height = size;
-    return c;
-  }
-
-  function blossomSprite(p) {
-    const S = 112, r = 48, c = makeCanvas(S), g = c.getContext('2d');
-    g.translate(S / 2, S / 2);
-    const grad = g.createRadialGradient(0, 0, 3, 0, 0, r);
-    grad.addColorStop(0, p.inner);
-    grad.addColorStop(0.5, p.mid);
-    grad.addColorStop(1, p.outer);
-    g.shadowColor = 'rgba(30, 0, 25, 0.55)';
-    g.shadowBlur = 5;
-    for (let i = 0; i < 5; i++) {
-      g.save();
-      g.rotate(i * TAU / 5);
-      petalPath(g, r);
-      g.fillStyle = grad;
-      g.fill();
-      g.restore();
-    }
-    g.shadowBlur = 0;
-    // petal veins
-    g.strokeStyle = p.inner;
-    g.globalAlpha = 0.35;
-    g.lineWidth = 1.2;
-    for (let i = 0; i < 5; i++) {
-      g.save();
-      g.rotate(i * TAU / 5);
-      g.beginPath(); g.moveTo(0, -4); g.lineTo(0, -r * 0.6); g.stroke();
-      g.restore();
-    }
-    g.globalAlpha = 1;
-    g.strokeStyle = p.stamen;
-    g.fillStyle = p.stamen;
-    g.lineWidth = 1.4;
-    for (let i = 0; i < 10; i++) {
-      const a = i * TAU / 10 + 0.3, len = r * (i % 2 ? 0.34 : 0.26);
-      g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(a) * len, Math.sin(a) * len); g.stroke();
-      g.beginPath(); g.arc(Math.cos(a) * len, Math.sin(a) * len, 2.2, 0, TAU); g.fill();
-    }
-    g.fillStyle = p.core;
-    g.beginPath(); g.arc(0, 0, 4.5, 0, TAU); g.fill();
-    return c;
-  }
-
-  function leafSprite() {
-    const S = 112, c = makeCanvas(S), g = c.getContext('2d');
-    g.translate(S / 2, S / 2);
-    const grad = g.createLinearGradient(0, 46, 0, -46);
-    grad.addColorStop(0, '#1f5a3a');
-    grad.addColorStop(1, '#8fd18a');
-    g.shadowColor = 'rgba(0, 0, 0, 0.5)';
-    g.shadowBlur = 4;
-    g.beginPath();
-    g.moveTo(0, 46);
-    g.bezierCurveTo(-26, 20, -22, -24, 0, -48);
-    g.bezierCurveTo(22, -24, 26, 20, 0, 46);
-    g.fillStyle = grad;
-    g.fill();
-    g.shadowBlur = 0;
-    g.strokeStyle = 'rgba(220, 255, 210, 0.5)';
-    g.lineWidth = 1.5;
-    g.beginPath(); g.moveTo(0, 42); g.lineTo(0, -40); g.stroke();
-    return c;
-  }
-
-  function fallingPetalSprite(inner, outer) {
-    const S = 64, c = makeCanvas(S), g = c.getContext('2d');
-    g.translate(S / 2, S / 2 + 26);
-    const grad = g.createLinearGradient(0, 0, 0, -54);
-    grad.addColorStop(0, inner);
-    grad.addColorStop(1, outer);
-    petalPath(g, 54);
-    g.fillStyle = grad;
-    g.fill();
-    return c;
-  }
-
-  function glowSprite() {
-    const S = 128, c = makeCanvas(S), g = c.getContext('2d');
-    const grad = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
-    grad.addColorStop(0, 'rgba(255, 245, 250, 1)');
-    grad.addColorStop(0.25, 'rgba(255, 190, 220, 0.55)');
-    grad.addColorStop(1, 'rgba(255, 150, 200, 0)');
-    g.fillStyle = grad;
-    g.fillRect(0, 0, S, S);
-    return c;
-  }
-
-  const SPRITES = { leaf: leafSprite() };
-  for (const k in PALETTES) SPRITES[k] = blossomSprite(PALETTES[k]);
-  const PETALS = [
-    fallingPetalSprite('#f48fb5', '#ffe3ee'),
-    fallingPetalSprite('#ea6f9f', '#ffc9dc'),
-    fallingPetalSprite('#f7b3cc', '#ffffff'),
-    fallingPetalSprite('#d9588c', '#ffb0cc')
-  ];
-  const GLOW = glowSprite();
-
-  /* ---------- scene state ---------- */
-
-  let W = 0, H = 0, DPR = 1;
-  let bg = null;
-  let L = 0, angle = 0, cx = 0, cy = 0;
-  let silhouette = [], blossoms = [], falling = [], bursts = [];
-  let startTime = null; // set when F is pressed
-
-  const SORI = 0.04;          // blade curvature
-  const S_TSUBA = 0.235, S_HABAKI = 0.25, S_BLADE = 0.277, S_TIP = 0.945;
-  const TRACE_TIME = 1.6, BLOOM_START = 1.25, BLOOM_SPAN = 5.5, POP = 0.55;
-
-  // Point on the katana: s runs pommel (0) to tip (1), off is the offset
-  // across the width, positive toward the cutting edge.
-  function kPoint(s, off) {
-    const u = s - 0.5;
-    const x = u * L, y = -4 * SORI * L * u * u + SORI * L * 0.33;
-    const ty = -8 * SORI * u, n = Math.hypot(1, ty);
-    return [x + (-ty / n) * off, y + (1 / n) * off];
-  }
-
-  function bladeHalf(s) {
-    return L * (0.0165 - 0.0035 * (s - S_BLADE) / (1 - S_BLADE));
-  }
-
-  function bounds(s) {
-    if (s < S_TSUBA) {
-      const hw = 0.0175 * L * (s < 0.012 ? 0.6 + 0.4 * Math.sqrt(s / 0.012) : 1);
-      return [-hw, hw];
-    }
-    if (s < S_HABAKI) return [-0.05 * L, 0.05 * L];
-    if (s < S_BLADE) return [-0.018 * L, 0.018 * L];
-    const hw = bladeHalf(s);
-    if (s <= S_TIP) return [-hw, hw];
-    const k = (s - S_TIP) / (1 - S_TIP);
-    return [-hw, -hw + 2 * hw * (1 - Math.pow(k, 1.8))];
-  }
-
-  function buildKatana() {
-    angle = W >= H ? -0.4 : -1.02;
-    L = 0.84 * Math.min(W / Math.cos(angle), H / Math.abs(Math.sin(angle)));
-    cx = W / 2; cy = H / 2;
-
-    // silhouette samples, doubled at section breaks for crisp corners
-    const ss = [];
-    for (let i = 0; i <= 320; i++) ss.push(i / 320);
-    for (const b of [S_TSUBA, S_HABAKI, S_BLADE]) ss.push(b - 1e-5, b + 1e-5);
-    ss.sort((a, b) => a - b);
-    silhouette = ss.map(s => {
-      const [lo, hi] = bounds(s);
-      return { s, up: kPoint(s, lo), dn: kPoint(s, hi) };
-    });
-
-    blossoms = [];
-    const add = (s, off, r, pal, order) => {
-      const [x, y] = kPoint(s, off);
-      blossoms.push({
-        s, x, y, r, pal,
-        rot: rand(0, TAU), phase: rand(0, TAU),
-        order: (order === undefined ? s : order) + rand(-0.012, 0.012)
-      });
-    };
-
-    // handle: woven diamond pattern
-    const hh = 0.0175 * L, hr = hh * 0.56;
-    let i = 0;
-    for (let s = 0.02; s < S_TSUBA - 0.012; s += hr * 1.15 / L, i++) {
-      add(s, -hh * 0.62, hr, i % 2 ? 'crimson' : 'plum');
-      add(s + hr * 0.55 / L, 0, hr * 0.95, i % 2 ? 'plum' : 'pale');
-      add(s, hh * 0.62, hr, i % 2 ? 'crimson' : 'plum');
-    }
-    add(0.007, 0, hh * 1.05, 'gold');                       // pommel
-    add(S_TSUBA - 0.009, -hh * 0.5, hh * 0.6, 'gold');      // collar
-    add(S_TSUBA - 0.009, hh * 0.5, hh * 0.6, 'gold');
-
-    // guard
-    const tr = 0.0105 * L, sm = (S_TSUBA + S_HABAKI) / 2;
-    for (let off = -0.047 * L, j = 0; off <= 0.0471 * L; off += tr * 1.05, j++) {
-      add(sm + (j % 2 ? 0.004 : -0.004), off, tr, 'gold');
-    }
-    add(sm, -0.052 * L, tr * 1.5, 'deep');
-    add(sm, 0.052 * L, tr * 1.5, 'deep');
-    add(sm - 0.006, -0.062 * L, tr * 1.7, 'leaf');
-    add(sm + 0.006, 0.062 * L, tr * 1.7, 'leaf');
-
-    // blade collar
-    for (const s of [S_HABAKI + 0.008, S_HABAKI + 0.02]) {
-      add(s, -0.008 * L, 0.0095 * L, 'gold');
-      add(s, 0.008 * L, 0.0095 * L, 'gold');
-    }
-
-    // blade: deep spine, pale body, white cutting edge
-    i = 0;
-    const step = 0.0098;
-    for (let s = S_BLADE + 0.006; s < 0.999; s += step, i++) {
-      const [lo, hi] = bounds(s), w = hi - lo, k = Math.max(0.22, w / (2 * bladeHalf(s)));
-      const base = bladeHalf(s) * k;
-      const s2 = Math.min(0.999, s + step / 2), [lo2, hi2] = bounds(s2);
-      add(s, lo + w * 0.2, base * 0.7, i % 9 === 4 ? 'deep' : 'pink');
-      add(s2, lo2 + (hi2 - lo2) * 0.5, base * 0.66, 'pale');
-      add(s, lo + w * 0.82, base * 0.6, 'white');
-      add(s2, lo2 + (hi2 - lo2) * 0.86, base * 0.5, 'white');
-      if (i % 8 === 3 && s < S_TIP) add(s, lo - base * 0.55, base * 0.85, 'leaf');
-      if (i % 11 === 6 && s < S_TIP) add(s, lo + w * 0.12, base * 1.05, 'deep');
-    }
-    add(0.999, bounds(0.999)[0] + 1, Math.max(2, L * 0.0035), 'white');
-
-    blossoms.sort((a, b) => a.order - b.order);
-    const dt = BLOOM_SPAN / blossoms.length;
-    blossoms.forEach((b, n) => { b.birth = BLOOM_START + n * dt; b.born = false; });
-  }
-
-  function buildBackground() {
-    bg = document.createElement('canvas');
-    bg.width = canvas.width; bg.height = canvas.height;
-    const g = bg.getContext('2d');
-    g.scale(DPR, DPR);
-
-    const sky = g.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, '#070512');
-    sky.addColorStop(0.45, '#170d2b');
-    sky.addColorStop(0.8, '#33173a');
-    sky.addColorStop(1, '#4a1d40');
-    g.fillStyle = sky;
-    g.fillRect(0, 0, W, H);
-
-    for (let i = 0; i < 140; i++) {
-      g.globalAlpha = rand(0.15, 0.7);
-      g.fillStyle = '#ffeef6';
-      g.beginPath();
-      g.arc(rand(0, W), rand(0, H * 0.7), rand(0.3, 1.2), 0, TAU);
-      g.fill();
-    }
-    g.globalAlpha = 1;
-
-    // moon and halo
-    const mx = W * 0.78, my = H * 0.22, mr = Math.min(W, H) * 0.11;
-    const halo = g.createRadialGradient(mx, my, mr * 0.8, mx, my, mr * 5);
-    halo.addColorStop(0, 'rgba(255, 190, 220, 0.30)');
-    halo.addColorStop(0.3, 'rgba(230, 130, 190, 0.10)');
-    halo.addColorStop(1, 'rgba(200, 100, 180, 0)');
-    g.fillStyle = halo;
-    g.fillRect(0, 0, W, H);
-    const moon = g.createRadialGradient(mx - mr * 0.3, my - mr * 0.3, mr * 0.1, mx, my, mr);
-    moon.addColorStop(0, '#fffafc');
-    moon.addColorStop(0.7, '#ffe1ec');
-    moon.addColorStop(1, '#f5b8d2');
-    g.fillStyle = moon;
-    g.beginPath(); g.arc(mx, my, mr, 0, TAU); g.fill();
-
-    // low pink mist
-    for (let i = 0; i < 7; i++) {
-      const x = rand(0, W), y = H * rand(0.85, 1.05), r = Math.max(W, H) * rand(0.2, 0.4);
-      const m = g.createRadialGradient(x, y, 0, x, y, r);
-      m.addColorStop(0, 'rgba(255, 140, 190, 0.10)');
-      m.addColorStop(1, 'rgba(255, 140, 190, 0)');
-      g.fillStyle = m;
-      g.fillRect(0, 0, W, H);
-    }
-
-    const vig = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.hypot(W, H) * 0.62);
-    vig.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    vig.addColorStop(1, 'rgba(0, 0, 0, 0.6)');
-    g.fillStyle = vig;
-    g.fillRect(0, 0, W, H);
-  }
-
-  function newFalling(anywhere) {
-    const z = Math.pow(Math.random(), 1.6) * 0.75 + 0.25;
-    return {
-      x: rand(-0.1 * W, 1.1 * W),
-      y: anywhere ? rand(-0.1 * H, H) : -30,
-      z, size: 5 + 15 * z,
-      rot: rand(0, TAU), vr: rand(-1.2, 1.2),
-      flip: rand(0, TAU), vflip: rand(1, 3.2),
-      sway: rand(0, TAU), vsway: rand(0.6, 1.6),
-      sprite: PETALS[(Math.random() * PETALS.length) | 0]
-    };
-  }
-
+  // ---------- low-res framebuffer + z-buffer (software rasterizer) ----------
+  let W = 0, H = 0, img, fb, zb, focal = 1;
   function resize() {
-    DPR = Math.min(window.devicePixelRatio || 1, 2);
-    W = window.innerWidth; H = window.innerHeight;
-    canvas.width = Math.round(W * DPR);
-    canvas.height = Math.round(H * DPR);
-    buildBackground();
-    buildKatana();
-    const count = Math.round(clamp(W * H / 9000, 70, 220));
-    falling = Array.from({ length: count }, () => newFalling(true));
-    bursts = [];
+    const scale = Math.max(2, Math.round(innerHeight / 270));
+    W = Math.max(64, Math.ceil(innerWidth / scale));
+    H = Math.max(64, Math.ceil(innerHeight / scale));
+    canvas.width = W; canvas.height = H;
+    img = ctx.createImageData(W, H);
+    fb = new Uint32Array(img.data.buffer);
+    zb = new Float32Array(W * H);
+    focal = H * 1.15;
   }
+  resize();
+  addEventListener('resize', resize);
 
-  /* ---------- drawing ---------- */
+  const rgb = (r, g, b) => (255 << 24 | (b & 255) << 16 | (g & 255) << 8 | (r & 255)) >>> 0;
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 
-  function drawPetal(p, alpha) {
-    const s = p.size;
-    ctx.globalAlpha = alpha;
-    ctx.translate(p.x, p.y);
-    ctx.rotate(p.rot);
-    ctx.scale(1, Math.cos(p.flip) * 0.85 + 0.15);
-    ctx.drawImage(p.sprite, -s, -s, 2 * s, 2 * s);
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  }
-
-  function updateFalling(dt, t) {
-    const wind = 28 + 22 * Math.sin(t * 0.31) + 10 * Math.sin(t * 0.83);
-    for (const p of falling) {
-      p.sway += p.vsway * dt;
-      p.flip += p.vflip * dt;
-      p.rot += p.vr * dt;
-      p.y += (26 + 80 * p.z) * dt;
-      p.x += (wind + Math.sin(p.sway) * 34) * p.z * dt;
-      if (p.y > H + 30 || p.x > W * 1.12) {
-        Object.assign(p, newFalling(false));
-        if (Math.random() < 0.3) { p.x = -20; p.y = rand(0, H * 0.7); }
+  // z values are inverse depth: larger is nearer
+  function tri(x0, y0, z0, x1, y1, z1, x2, y2, z2, col) {
+    const area = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0);
+    if (area === 0) return;
+    let minX = Math.floor(Math.min(x0, x1, x2)), maxX = Math.ceil(Math.max(x0, x1, x2));
+    let minY = Math.floor(Math.min(y0, y1, y2)), maxY = Math.ceil(Math.max(y0, y1, y2));
+    if (minX < 0) minX = 0; if (minY < 0) minY = 0;
+    if (maxX > W - 1) maxX = W - 1; if (maxY > H - 1) maxY = H - 1;
+    const inv = 1 / area;
+    for (let y = minY; y <= maxY; y++) {
+      const py = y + 0.5, row = y * W;
+      for (let x = minX; x <= maxX; x++) {
+        const px = x + 0.5;
+        const w0 = ((x1 - px) * (y2 - py) - (x2 - px) * (y1 - py)) * inv;
+        if (w0 < 0) continue;
+        const w1 = ((x2 - px) * (y0 - py) - (x0 - px) * (y2 - py)) * inv;
+        if (w1 < 0) continue;
+        const w2 = 1 - w0 - w1;
+        if (w2 < 0) continue;
+        const z = w0 * z0 + w1 * z1 + w2 * z2, i = row + x;
+        if (z > zb[i]) { zb[i] = z; fb[i] = col; }
       }
     }
   }
 
-  function drawSilhouette(T, done) {
-    const p = easeInOut(clamp(T / TRACE_TIME));
-    let n = 0;
-    while (n < silhouette.length && silhouette[n].s <= p) n++;
-    if (n < 2) return;
+  // ---------- katana curve (local space: blade along +x, spine toward +y) ----------
+  const L = 3.9, HANDLE = -0.95, CURVE = 0.03, PIVOT = 1.45;
+  const LIGHT = norm([0.35, 0.8, 0.5]);
 
-    ctx.beginPath();
-    ctx.moveTo(silhouette[0].up[0], silhouette[0].up[1]);
-    for (let i = 1; i < n; i++) ctx.lineTo(silhouette[i].up[0], silhouette[i].up[1]);
-    for (let i = n - 1; i >= 0; i--) ctx.lineTo(silhouette[i].dn[0], silhouette[i].dn[1]);
-    ctx.closePath();
-
-    ctx.fillStyle = 'rgba(48, 10, 40, 0.6)';
-    ctx.fill();
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = 1.6;
-    ctx.shadowColor = 'rgba(255, 150, 200, 0.95)';
-    ctx.shadowBlur = 18;
-    ctx.strokeStyle = `rgba(255, 228, 240, ${0.95 - 0.6 * done})`;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-
-    if (p < 1) {
-      const [x, y] = kPoint(p, 0), r = L * 0.06;
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.drawImage(GLOW, x - r, y - r, 2 * r, 2 * r);
-      ctx.globalCompositeOperation = 'source-over';
-    }
+  function norm(v) { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; }
+  function cross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+  function frame(s) {
+    const tl = Math.hypot(1, 2 * CURVE * s);
+    const tx = 1 / tl, ty = 2 * CURVE * s / tl;
+    return { px: s, py: CURVE * s * s, tx, ty, nx: -ty, ny: tx };
   }
+  // point at arc position s, offset a toward the spine and b sideways
+  function pt(s, a, b) { const f = frame(s); return [f.px + f.nx * a, f.py + f.ny * a, b]; }
+  const tipQ = s => clamp((s - (L - 0.6)) / 0.6, 0, 1);
+  const bladeTop = s => 0.085 - 0.012 * (s / L);
+  const bladeBot = s => { const h = bladeTop(s), q = tipQ(s); return -h + 2 * h * q * q; };
 
-  function drawKatana(T, t) {
-    const bob = Math.sin(t * 0.9) * 5;
-    const cosA = Math.cos(angle), sinA = Math.sin(angle);
-    const total = BLOOM_START + BLOOM_SPAN + POP;
-    const done = clamp((T - BLOOM_START) / BLOOM_SPAN);
-
-    ctx.translate(cx, cy + bob);
-    ctx.rotate(angle);
-    ctx.globalAlpha = clamp(T / 0.4);
-    drawSilhouette(T, done);
-    ctx.globalAlpha = 1;
-
-    // periodic sheen running up the blade once it is complete
-    let sheen = -1;
-    if (T > total + 0.4) {
-      const c = (T - total - 0.4) % 5;
-      if (c < 1.3) sheen = S_BLADE - 0.05 + (c / 1.3) * (1.1 - S_BLADE);
-    }
-
-    for (const b of blossoms) {
-      const age = T - b.birth;
-      if (age <= 0) break;
-      if (!b.born) {
-        b.born = true;
-        if (Math.random() < 0.3) {
-          const p = newFalling(false);
-          p.x = cx + b.x * cosA - b.y * sinA;
-          p.y = cy + bob + b.x * sinA + b.y * cosA;
-          p.size = rand(4, 8);
-          p.vx = rand(-60, 60); p.vy = rand(-90, -10); p.life = 1;
-          bursts.push(p);
-        }
-      }
-      let k = age < POP ? easeOutBack(age / POP) : 1;
-      let glow = age < 0.45 ? (1 - age / 0.45) * 0.4 : 0;
-      if (sheen >= 0) {
-        const d = (b.s - sheen) / 0.035, g = Math.exp(-d * d);
-        k *= 1 + 0.22 * g;
-        glow = Math.max(glow, g * 0.7);
-      }
-      const R = b.r * 1.18 * k;
-      const a = b.rot + Math.sin(t * 1.3 + b.phase) * 0.18;
-      const c = Math.cos(a), s = Math.sin(a);
-      ctx.transform(c, s, -s, c, b.x, b.y);
-      ctx.drawImage(SPRITES[b.pal], -R, -R, 2 * R, 2 * R);
-      ctx.transform(c, -s, s, c, 0, 0);
-      ctx.translate(-b.x, -b.y);
-      if (glow > 0.01) {
-        const gr = b.r * 3.2;
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = glow;
-        ctx.drawImage(GLOW, b.x - gr, b.y - gr, 2 * gr, 2 * gr);
-        ctx.globalAlpha = 1;
-        ctx.globalCompositeOperation = 'source-over';
+  // ---------- base mesh (revealed first, as the katana "appears") ----------
+  const mPos = [], mCol = [], mKey = [];
+  function addTri(a, b, c, col, key) {
+    const n = norm(cross([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [c[0] - a[0], c[1] - a[1], c[2] - a[2]]));
+    const l = 0.45 + 0.55 * Math.abs(n[0] * LIGHT[0] + n[1] * LIGHT[1] + n[2] * LIGHT[2]);
+    mPos.push(...a, ...b, ...c);
+    mCol.push([col[0] * l, col[1] * l, col[2] * l]);
+    mKey.push(key);
+  }
+  function loft(rings, keys, colFn) {
+    for (let i = 0; i < rings.length - 1; i++) {
+      const A = rings[i], B = rings[i + 1], n = A.length;
+      for (let j = 0; j < n; j++) {
+        const k = (j + 1) % n, col = colFn(i, j), key = (keys[i] + keys[i + 1]) / 2;
+        addTri(A[j], A[k], B[k], col, key);
+        addTri(A[j], B[k], B[j], col, key);
       }
     }
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   }
-
-  function drawBursts(dt) {
-    for (let i = bursts.length - 1; i >= 0; i--) {
-      const p = bursts[i];
-      p.life -= dt * 0.55;
-      if (p.life <= 0) { bursts.splice(i, 1); continue; }
-      p.vy += 120 * dt;
-      p.x += p.vx * dt; p.y += p.vy * dt;
-      p.rot += p.vr * 2 * dt; p.flip += p.vflip * dt;
-      drawPetal(p, clamp(p.life * 1.5));
+  function cap(ring, center, col, key) {
+    for (let j = 0; j < ring.length; j++) addTri(center, ring[j], ring[(j + 1) % ring.length], col, key);
+  }
+  {
+    const rings = [], keys = [];
+    for (let i = 0; i <= 28; i++) {
+      const s = L * i / 28, t = 0.024 * (1 - tipQ(s) * 0.85);
+      rings.push([pt(s, bladeTop(s), -t), pt(s, bladeTop(s), t), pt(s, bladeBot(s), 0)]);
+      keys.push(s);
     }
-    ctx.globalAlpha = 1;
-  }
+    loft(rings, keys, (i, j) => j === 0 ? [150, 140, 175] : [205, 195, 225]);
 
-  let last = performance.now();
-  function frame(now) {
-    const dt = Math.min(0.05, (now - last) / 1000), t = now / 1000;
-    last = now;
-
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(bg, 0, 0);
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-
-    updateFalling(dt, t);
-    for (const p of falling) if (p.z <= 0.88) drawPetal(p, 0.3 + 0.65 * p.z);
-    ctx.globalAlpha = 1;
-
-    if (startTime !== null) {
-      drawKatana((now - startTime) / 1000, t);
-      drawBursts(dt);
+    const hr = [], hk = [];
+    for (let i = 0; i <= 10; i++) {
+      const s = HANDLE + (-0.03 - HANDLE) * i / 10, ring = [];
+      for (let j = 0; j < 6; j++) { const a = j / 6 * Math.PI * 2; ring.push(pt(s, Math.cos(a) * 0.075, Math.sin(a) * 0.05)); }
+      hr.push(ring); hk.push(s);
     }
+    loft(hr, hk, (i, j) => (i + j) & 1 ? [70, 34, 86] : [118, 60, 128]);
+    cap(hr[0], pt(HANDLE - 0.03, 0, 0), [150, 110, 150], HANDLE);
 
-    // nearest petals pass in front of the blade
-    for (const p of falling) if (p.z > 0.88) drawPetal(p, 0.9);
-    ctx.globalAlpha = 1;
+    const g0 = [], g1 = [];
+    for (let j = 0; j < 10; j++) {
+      const a = j / 10 * Math.PI * 2;
+      g0.push(pt(-0.03, Math.cos(a) * 0.25, Math.sin(a) * 0.25));
+      g1.push(pt(0.015, Math.cos(a) * 0.25, Math.sin(a) * 0.25));
+    }
+    loft([g0, g1], [-0.03, 0.015], () => [170, 120, 160]);
+    cap(g0, pt(-0.03, 0, 0), [140, 90, 140], -0.03);
+    cap(g1, pt(0.015, 0, 0), [140, 90, 140], 0.015);
+  }
+  const meshPos = new Float32Array(mPos), meshN = mKey.length;
 
-    requestAnimationFrame(frame);
+  // ---------- blossoms ----------
+  const PINKS = [[255, 92, 168], [240, 120, 188], [250, 160, 208], [214, 62, 142], [255, 190, 222]];
+  const PALES = [[240, 228, 244], [214, 200, 226], [196, 184, 212], [252, 214, 232]];
+  const raw = [];
+  // pink: 0 = pale/silver, 1 = pink
+  function addBlossom(p, n, r, pink, key) {
+    n = norm([n[0] + (Math.random() - 0.5) * 0.7, n[1] + (Math.random() - 0.5) * 0.7, n[2] + (Math.random() - 0.5) * 0.7]);
+    const u = norm(cross(n, Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0])), v = cross(n, u);
+    const lift = 0.008 + Math.random() * 0.018, cup = 0.2 + Math.random() * 0.4;
+    const a0 = Math.random() * Math.PI * 2;
+    const base = (Math.random() < pink ? PINKS : PALES)[Math.random() * 4 | 0];
+    const off = [], cols = [];
+    for (let j = 0; j < 5; j++) {
+      const a = a0 + j * Math.PI * 0.4, ca = Math.cos(a), sa = Math.sin(a);
+      const d = [u[0] * ca + v[0] * sa, u[1] * ca + v[1] * sa, u[2] * ca + v[2] * sa];
+      const e = [-u[0] * sa + v[0] * ca, -u[1] * sa + v[1] * ca, -u[2] * sa + v[2] * ca];
+      const mk = (fd, fe, fn) => [r * (d[0] * fd + e[0] * fe + n[0] * fn), r * (d[1] * fd + e[1] * fe + n[1] * fn), r * (d[2] * fd + e[2] * fe + n[2] * fn)];
+      const left = mk(0.5, 0.3, cup * 0.35), tip = mk(1, 0, cup), right = mk(0.5, -0.3, cup * 0.35);
+      off.push(...left, ...tip, ...right);
+      for (const [q, w] of [[left, tip], [tip, right]]) {
+        const fn = norm(cross(q, w));
+        const l = 0.5 + 0.5 * Math.abs(fn[0] * LIGHT[0] + fn[1] * LIGHT[1] + fn[2] * LIGHT[2]) + (Math.random() - 0.5) * 0.12;
+        cols.push([clamp(base[0] * l, 0, 255), clamp(base[1] * l, 0, 255), clamp(base[2] * l, 0, 255)]);
+      }
+    }
+    raw.push({ c: [p[0] + n[0] * lift, p[1] + n[1] * lift, p[2] + n[2] * lift], off, cols, key: key + (Math.random() - 0.5) * 0.3 });
+  }
+  {
+    const R = Math.random;
+    for (let i = 0; i < 760; i++) {            // blade flats: pink near the spine, silver near the edge
+      const s = 0.04 + R() * (L - 0.06), top = bladeTop(s), bot = bladeBot(s), m = R(), side = R() < 0.5 ? -1 : 1;
+      addBlossom(pt(s, bot + (top - bot) * m, side * 0.02), [0, 0, side], (0.055 + R() * 0.06) * (1 - tipQ(s) * 0.6), 0.12 + m * 0.85, s);
+    }
+    for (let i = 0; i < 150; i++) {            // spine
+      const s = 0.04 + R() * (L - 0.05), f = frame(s);
+      addBlossom(pt(s, bladeTop(s), (R() - 0.5) * 0.04), [f.nx, f.ny, 0], (0.06 + R() * 0.07) * (1 - tipQ(s) * 0.6), 0.95, s);
+    }
+    for (let i = 0; i < 150; i++) {            // cutting edge
+      const s = 0.04 + R() * (L - 0.05), f = frame(s);
+      addBlossom(pt(s, bladeBot(s), 0), [-f.nx, -f.ny, 0], (0.05 + R() * 0.055) * (1 - tipQ(s) * 0.6), 0.1, s);
+    }
+    for (let i = 0; i < 210; i++) {            // handle
+      const s = HANDLE + R() * (-0.05 - HANDLE), a = R() * Math.PI * 2, f = frame(s);
+      addBlossom(pt(s, Math.cos(a) * 0.075, Math.sin(a) * 0.05), [f.nx * Math.cos(a), f.ny * Math.cos(a), Math.sin(a)], 0.055 + R() * 0.05, i % 5 ? 0.9 : 0.2, s);
+    }
+    for (let i = 0; i < 18; i++) {             // pommel
+      const f = frame(HANDLE);
+      addBlossom(pt(HANDLE - 0.02, (R() - 0.5) * 0.1, (R() - 0.5) * 0.07), [-f.tx, -f.ty, 0], 0.05 + R() * 0.04, 0.5, HANDLE);
+    }
+    for (let i = 0; i < 150; i++) {            // guard: faces and rim, larger and spikier
+      const a = R() * Math.PI * 2, rim = i % 3 === 0, rr = rim ? 0.25 : 0.09 + R() * 0.16, side = R() < 0.5 ? -1 : 1;
+      const p = pt(rim ? -0.008 : side < 0 ? -0.03 : 0.015, Math.cos(a) * rr, Math.sin(a) * rr);
+      addBlossom(p, rim ? [0, Math.cos(a), Math.sin(a)] : [side, 0, 0], 0.11 + R() * 0.1, 0.7, -0.01);
+    }
+  }
+  raw.sort((a, b) => a.key - b.key);
+  const BN = raw.length;
+  const bC = new Float32Array(BN * 3), bOff = new Float32Array(BN * 45), bCol = new Uint8Array(BN * 30);
+  const bBirth = new Float32Array(BN), bPhase = new Float32Array(BN), bBorn = new Uint8Array(BN);
+  const TRACE = 1.15, BLOOM = 5.2, POP = 0.45;
+  raw.forEach((b, i) => {
+    bC.set(b.c, i * 3); bOff.set(b.off, i * 45);
+    b.cols.forEach((c, j) => bCol.set(c, i * 30 + j * 3));
+    // slow start, so the first blossoms visibly open one at a time
+    bBirth[i] = TRACE * 0.85 + BLOOM * Math.pow(i / BN, 0.62);
+    bPhase[i] = Math.random() * 6.28;
+  });
+
+  // ---------- falling petals ----------
+  const PN = 260, petals = [];
+  const PETAL_COLS = [[255, 170, 205], [240, 140, 185], [255, 205, 225], [200, 120, 160], [235, 215, 235]];
+  function spawnPetal(p, fresh) {
+    const a = Math.random() * 6.283, r = Math.sqrt(Math.random()) * 8.5;
+    p.x = Math.cos(a) * r; p.z = Math.sin(a) * r;
+    p.y = fresh ? Math.random() * 7 : 6 + Math.random() * 2.5;
+    p.vy = 0.3 + Math.random() * 0.5;
+    p.sw = 0.15 + Math.random() * 0.35; p.sp = Math.random() * 6.28; p.sf = 0.5 + Math.random();
+    p.th = Math.random() * 6.28; p.ph = Math.random() * 6.28; p.ps = Math.random() * 6.28;
+    p.w1 = (Math.random() - 0.5) * 3; p.w2 = (Math.random() - 0.5) * 2; p.w3 = 1 + Math.random() * 3;
+    p.len = 0.05 + Math.random() * 0.075; p.wid = p.len * (0.35 + Math.random() * 0.3);
+    p.col = PETAL_COLS[Math.random() * PETAL_COLS.length | 0];
+  }
+  for (let i = 0; i < PN; i++) { const p = {}; spawnPetal(p, true); petals.push(p); }
+  let shedIdx = 0;
+  function shed(x, y, z) {
+    const p = petals[shedIdx = (shedIdx + 1) % PN];
+    spawnPetal(p, false);
+    p.x = x; p.y = y; p.z = z; p.vy = 0.25 + Math.random() * 0.3;
   }
 
-  window.addEventListener('keydown', e => {
+  // ---------- stars ----------
+  const stars = [];
+  for (let i = 0; i < 140; i++) {
+    const a = Math.random() * 6.283, y = 0.06 + Math.random() * 0.9, r = Math.sqrt(1 - y * y);
+    stars.push([Math.cos(a) * r, y, Math.sin(a) * r, 60 + Math.random() * 110, Math.random() * 6.28]);
+  }
+
+  // ---------- camera + input ----------
+  let yaw = -0.25, pitch = 0.17, dist = 5.6, yawVel = 0, pitchVel = 0;
+  let dragging = false, lastX = 0, lastY = 0, lastInput = -1e9;
+  const AUTO = 0.07;
+  canvas.addEventListener('pointerdown', e => {
+    dragging = true; lastX = e.clientX; lastY = e.clientY;
+    canvas.setPointerCapture(e.pointerId); canvas.classList.add('dragging');
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    yaw -= dx * 0.006; pitch = clamp(pitch + dy * 0.005, 0.03, 1.35);
+    yawVel = -dx * 0.006 * 60; pitchVel = dy * 0.005 * 60;
+    lastInput = performance.now();
+  });
+  const endDrag = () => { dragging = false; canvas.classList.remove('dragging'); lastInput = performance.now(); };
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    dist = clamp(dist * Math.exp(e.deltaY * 0.001), 3.2, 13);
+  }, { passive: false });
+
+  let startTime = null;
+  addEventListener('keydown', e => {
     if (e.code !== 'KeyF' && e.key !== 'f' && e.key !== 'F') return;
     if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
     startTime = performance.now();
-    bursts = [];
-    for (const b of blossoms) b.born = false;
+    bBorn.fill(0);
   });
-  window.addEventListener('resize', resize);
 
-  resize();
-  requestAnimationFrame(frame);
+  // ---------- frame ----------
+  const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v / 16 - 0.5) * 9);
+  const easeBack = x => { const c = 2.2, y = x - 1; return 1 + (c + 1) * y * y * y + c * y * y; };
+  let prev = performance.now(), shedAcc = 0;
+
+  function render(now) {
+    const dt = Math.min(0.05, (now - prev) / 1000); prev = now;
+    const time = now / 1000;
+    const t = startTime === null ? -1 : (now - startTime) / 1000;
+
+    if (!dragging) {
+      // coast after a drag, then ease back into a slow orbit
+      const idle = clamp((now - lastInput) / 1800 - 0.4, 0, 1);
+      yawVel += (AUTO * idle - yawVel) * Math.min(1, dt * 2.5);
+      pitchVel *= Math.exp(-dt * 4);
+      yaw += yawVel * dt; pitch = clamp(pitch + pitchVel * dt, 0.03, 1.35);
+    }
+
+    // camera basis
+    const tgtY = 1.65, cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const camX = Math.sin(yaw) * cp * dist, camY = tgtY + sp * dist, camZ = Math.cos(yaw) * cp * dist;
+    const Fx = -Math.sin(yaw) * cp, Fy = -sp, Fz = -Math.cos(yaw) * cp;
+    const Rx = Math.cos(yaw), Rz = -Math.sin(yaw);               // right = F x up (Ry = 0)
+    const Ux = -Rz * Fy, Uy = Rz * Fx - Rx * Fz, Uz = Rx * Fy;    // up = R x F
+    const cx = W / 2, cy = H / 2;
+
+    // katana model matrix: tilt tip-up, slight roll, gentle bob
+    const tilt = 0.47 + Math.sin(time * 0.7) * 0.015, roll = Math.sin(time * 0.9) * 0.1;
+    const C = Math.cos(tilt), S = Math.sin(tilt), c = Math.cos(roll), s = Math.sin(roll);
+    const M = [C, -S * c, S * s, S, C * c, -C * s, 0, s, c];
+    const mx = 0, my = 1.75 + Math.sin(time * 1.1) * 0.05, mz = 0;
+    const pvx = PIVOT, pvy = CURVE * PIVOT * PIVOT;
+    // combined local -> view rotation and translation
+    const A = [
+      Rx * M[0] + Rz * M[6], Rx * M[1] + Rz * M[7], Rx * M[2] + Rz * M[8],
+      Ux * M[0] + Uy * M[3] + Uz * M[6], Ux * M[1] + Uy * M[4] + Uz * M[7], Ux * M[2] + Uy * M[5] + Uz * M[8],
+      Fx * M[0] + Fy * M[3] + Fz * M[6], Fx * M[1] + Fy * M[4] + Fz * M[7], Fx * M[2] + Fy * M[5] + Fz * M[8]];
+    const ox = mx - camX, oy = my - camY, oz = mz - camZ;
+    const Tx = Rx * ox + Rz * oz, Ty = Ux * ox + Uy * oy + Uz * oz, Tz = Fx * ox + Fy * oy + Fz * oz;
+
+    const bloomed = t < 0 ? 0 : clamp((t - TRACE * 0.85) / BLOOM, 0, 1);
+    const glow = t < 0 ? 0 : Math.max(bloomed, clamp(t / TRACE, 0, 1) * 0.35);
+
+    // --- background: sky gradient + raycast checker floor ---
+    zb.fill(0);
+    const half = (L - HANDLE) / 2 * C;
+    for (let y = 0; y < H; y++) {
+      const v = (cy - y - 0.5) / focal;
+      const bx = Fx + Ux * v, by = Fy + Uy * v, bz = Fz + Uz * v;
+      const row = y * W;
+      if (by >= -0.002) {
+        const k = clamp(by / Math.hypot(bx, by, bz) * 1.6, 0, 1);
+        const col = rgb(24 - 15 * k, 11 - 7 * k, 40 - 20 * k);
+        for (let x = 0; x < W; x++) fb[row + x] = col;
+        continue;
+      }
+      const tt = -camY / by, fog = 1 / (1 + tt * tt * 0.011);
+      for (let x = 0; x < W; x++) {
+        const u = (x + 0.5 - cx) / focal;
+        const wx = camX + (bx + Rx * u) * tt, wz = camZ + (bz + Rz * u) * tt;
+        const light = (Math.floor(wx / 1.25) + Math.floor(wz / 1.25)) & 1;
+        const dx = wx - clamp(wx, -half, half), g = glow * 0.5 / (1 + (dx * dx + wz * wz) * 0.9);
+        const r = light ? 66 : 30, gg = light ? 40 : 15, b = light ? 104 : 54;
+        fb[row + x] = rgb(24 + (r - 24) * fog + 80 * g * fog, 11 + (gg - 11) * fog + 22 * g * fog, 40 + (b - 40) * fog + 60 * g * fog);
+      }
+    }
+    for (const st of stars) {
+      const dx = st[0], dy = st[1], dz = st[2];
+      const vz = Fx * dx + Fy * dy + Fz * dz;
+      if (vz < 0.1) continue;
+      const sx = cx + focal * (Rx * dx + Rz * dz) / vz | 0, sy = cy - focal * (Ux * dx + Uy * dy + Uz * dz) / vz | 0;
+      if (sx < 0 || sx >= W || sy < 0 || sy >= H) continue;
+      const b = st[3] * (0.7 + 0.3 * Math.sin(time * 1.5 + st[4]));
+      fb[sy * W + sx] = rgb(b * 0.95, b * 0.8, b);
+    }
+
+    // --- katana body: sweeps in from pommel to tip ---
+    if (t >= 0) {
+      const e = clamp(t / TRACE, 0, 1), front = HANDLE - 0.1 + (L - HANDLE + 0.5) * (1 - (1 - e) * (1 - e));
+      const sc = new Float32Array(9);
+      for (let i = 0; i < meshN; i++) {
+        const key = mKey[i];
+        if (key > front) continue;
+        let ok = true;
+        for (let j = 0; j < 3; j++) {
+          const lx = meshPos[i * 9 + j * 3] - pvx, ly = meshPos[i * 9 + j * 3 + 1] - pvy, lz = meshPos[i * 9 + j * 3 + 2];
+          const z = A[6] * lx + A[7] * ly + A[8] * lz + Tz;
+          if (z < 0.25) { ok = false; break; }
+          sc[j * 3] = cx + focal * (A[0] * lx + A[1] * ly + A[2] * lz + Tx) / z;
+          sc[j * 3 + 1] = cy - focal * (A[3] * lx + A[4] * ly + A[5] * lz + Ty) / z;
+          sc[j * 3 + 2] = 1 / z;
+        }
+        if (!ok) continue;
+        const hot = clamp(1 - (front - key) / 0.45, 0, 1), col = mCol[i];
+        tri(sc[0], sc[1], sc[2], sc[3], sc[4], sc[5], sc[6], sc[7], sc[8],
+          rgb(col[0] + (255 - col[0]) * hot, col[1] + (225 - col[1]) * hot, col[2] + (245 - col[2]) * hot));
+      }
+
+      // --- blossoms: open one by one along the katana ---
+      const P = new Float32Array(48);
+      for (let i = 0; i < BN; i++) {
+        const age = t - bBirth[i];
+        if (age < 0) break;
+        const lx = bC[i * 3] - pvx, ly = bC[i * 3 + 1] - pvy, lz = bC[i * 3 + 2];
+        if (!bBorn[i]) {
+          bBorn[i] = 1;
+          if (Math.random() < 0.035) shed(M[0] * lx + M[1] * ly + M[2] * lz + mx, M[3] * lx + M[4] * ly + M[5] * lz + my, M[6] * lx + M[7] * ly + M[8] * lz + mz);
+        }
+        const vx = A[0] * lx + A[1] * ly + A[2] * lz + Tx, vy = A[3] * lx + A[4] * ly + A[5] * lz + Ty, vz = A[6] * lx + A[7] * ly + A[8] * lz + Tz;
+        if (vz < 0.4) continue;
+        const k = (age >= POP ? 1 : easeBack(age / POP)) * (1 + 0.05 * Math.sin(time * 2.2 + bPhase[i]));
+        const flash = age < 0.7 ? 1 - age / 0.7 : 0;
+        const o = i * 45;
+        for (let j = 0; j < 15; j++) {
+          const qx = bOff[o + j * 3] * k, qy = bOff[o + j * 3 + 1] * k, qz = bOff[o + j * 3 + 2] * k;
+          const z = vz + A[6] * qx + A[7] * qy + A[8] * qz;
+          P[j * 3] = cx + focal * (vx + A[0] * qx + A[1] * qy + A[2] * qz) / z;
+          P[j * 3 + 1] = cy - focal * (vy + A[3] * qx + A[4] * qy + A[5] * qz) / z;
+          P[j * 3 + 2] = 1 / z;
+        }
+        const sx = cx + focal * vx / vz, sy = cy - focal * vy / vz, sz = 1 / vz;
+        for (let j = 0; j < 5; j++) {
+          const a = j * 9, ci = i * 30 + j * 6;
+          let r1 = bCol[ci], g1 = bCol[ci + 1], b1 = bCol[ci + 2], r2 = bCol[ci + 3], g2 = bCol[ci + 4], b2 = bCol[ci + 5];
+          if (flash > 0) {
+            r1 += (255 - r1) * flash; g1 += (250 - g1) * flash; b1 += (255 - b1) * flash;
+            r2 += (255 - r2) * flash; g2 += (250 - g2) * flash; b2 += (255 - b2) * flash;
+          }
+          tri(sx, sy, sz, P[a], P[a + 1], P[a + 2], P[a + 3], P[a + 4], P[a + 5], rgb(r1, g1, b1));
+          tri(sx, sy, sz, P[a + 3], P[a + 4], P[a + 5], P[a + 6], P[a + 7], P[a + 8], rgb(r2, g2, b2));
+        }
+      }
+
+      // once in bloom, the katana keeps shedding the odd petal
+      if (bloomed >= 1) {
+        shedAcc += dt;
+        if (shedAcc > 0.5) {
+          shedAcc = 0;
+          const i = Math.random() * BN | 0, lx = bC[i * 3] - pvx, ly = bC[i * 3 + 1] - pvy, lz = bC[i * 3 + 2];
+          shed(M[0] * lx + M[1] * ly + M[2] * lz + mx, M[3] * lx + M[4] * ly + M[5] * lz + my, M[6] * lx + M[7] * ly + M[8] * lz + mz);
+        }
+      }
+    }
+
+    // --- falling petals: tumbling rhombi ---
+    for (const p of petals) {
+      p.y -= p.vy * dt;
+      p.th += p.w1 * dt; p.ph += p.w2 * dt; p.ps += p.w3 * dt;
+      if (p.y < 0.02) spawnPetal(p, false);
+      const wx = p.x + Math.sin(time * p.sf + p.sp) * p.sw, wy = p.y, wz = p.z + Math.cos(time * p.sf * 0.8 + p.sp) * p.sw;
+      const ct = Math.cos(p.th), stt = Math.sin(p.th), cph = Math.cos(p.ph), sph = Math.sin(p.ph);
+      const ax = cph * ct, ay = stt, az = sph * ct;
+      const b0x = -sph, b0z = cph;
+      const b1x = ay * b0z, b1y = az * b0x - ax * b0z, b1z = -ay * b0x;
+      const cs = Math.cos(p.ps), sn = Math.sin(p.ps);
+      const bx = cs * b0x + sn * b1x, by = sn * b1y, bz = cs * b0z + sn * b1z;
+      const nx = cs * b1x - sn * b0x, ny = cs * b1y, nz = cs * b1z - sn * b0z;
+      const l = 0.5 + 0.5 * Math.abs(nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2]);
+      const fade = clamp(1.25 - Math.hypot(wx - camX, wz - camZ) / 16, 0.3, 1) * l;
+      const col = rgb(p.col[0] * fade, p.col[1] * fade, p.col[2] * fade);
+      const q = [];
+      let ok = true;
+      for (const [fa, fbk] of [[p.len, 0], [0, p.wid], [-p.len, 0], [0, -p.wid]]) {
+        const dx = wx + ax * fa + bx * fbk - camX, dy = wy + ay * fa + by * fbk - camY, dz = wz + az * fa + bz * fbk - camZ;
+        const z = Fx * dx + Fy * dy + Fz * dz;
+        if (z < 1.3) { ok = false; break; }
+        q.push(cx + focal * (Rx * dx + Rz * dz) / z, cy - focal * (Ux * dx + Uy * dy + Uz * dz) / z, 1 / z);
+      }
+      if (!ok) continue;
+      tri(q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7], q[8], col);
+      tri(q[0], q[1], q[2], q[6], q[7], q[8], q[9], q[10], q[11], col);
+    }
+
+    // --- retro finish: ordered dither to 5 bits per channel, soft scanlines ---
+    for (let y = 0, i = 0; y < H; y++) {
+      const line = y & 1 ? 0.86 : 1, br = (y & 3) * 4;
+      for (let x = 0; x < W; x++, i++) {
+        const px = fb[i], d = BAYER[br + (x & 3)];
+        let r = (px & 255) + d, g = (px >> 8 & 255) + d, b = (px >> 16 & 255) + d;
+        r = (r < 0 ? 0 : r > 255 ? 255 : r) & 0xF8; g = (g < 0 ? 0 : g > 255 ? 255 : g) & 0xF8; b = (b < 0 ? 0 : b > 255 ? 255 : b) & 0xF8;
+        fb[i] = (255 << 24 | (b * line) << 16 | (g * line) << 8 | (r * line)) >>> 0;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    requestAnimationFrame(render);
+  }
+  requestAnimationFrame(render);
 })();
 </script>
 </body>
