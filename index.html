@@ -125,12 +125,12 @@
     const g0 = [], g1 = [];
     for (let j = 0; j < 10; j++) {
       const a = j / 10 * Math.PI * 2;
-      g0.push(pt(-0.03, Math.cos(a) * 0.25, Math.sin(a) * 0.25));
-      g1.push(pt(0.015, Math.cos(a) * 0.25, Math.sin(a) * 0.25));
+      g0.push(pt(-0.03, Math.cos(a) * 0.13, Math.sin(a) * 0.13));
+      g1.push(pt(0.015, Math.cos(a) * 0.13, Math.sin(a) * 0.13));
     }
-    loft([g0, g1], [-0.03, 0.015], () => [170, 120, 160]);
-    cap(g0, pt(-0.03, 0, 0), [140, 90, 140], -0.03);
-    cap(g1, pt(0.015, 0, 0), [140, 90, 140], 0.015);
+    loft([g0, g1], [-0.03, 0.015], () => [232, 150, 188]);
+    cap(g0, pt(-0.03, 0, 0), [214, 120, 166], -0.03);
+    cap(g1, pt(0.015, 0, 0), [214, 120, 166], 0.015);
   }
   const meshPos = new Float32Array(mPos), meshN = mKey.length;
 
@@ -139,10 +139,11 @@
   const PALES = [[255, 240, 246], [250, 228, 238], [238, 224, 238], [255, 220, 234]];
   const raw = [];
   // pink: 0 = pale/silver, 1 = pink
-  function addBlossom(p, n, r, pink, key) {
-    n = norm([n[0] + (Math.random() - 0.5) * 0.4, n[1] + (Math.random() - 0.5) * 0.4, n[2] + (Math.random() - 0.5) * 0.4]);
+  function addBlossom(p, n, r, pink, key, bud) {
+    const jit = bud ? 0.12 : 0.4, sp = bud ? 0.42 : 1;
+    n = norm([n[0] + (Math.random() - 0.5) * jit, n[1] + (Math.random() - 0.5) * jit, n[2] + (Math.random() - 0.5) * jit]);
     const u = norm(cross(n, Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0])), v = cross(n, u);
-    const lift = 0.006 + Math.random() * 0.05, cup = 0.1 + Math.random() * 0.25, tone = 0.86 + Math.random() * 0.2;
+    const lift = 0.006 + Math.random() * 0.05, cup = bud ? 1.5 + Math.random() * 0.5 : 0.1 + Math.random() * 0.25, tone = 0.86 + Math.random() * 0.2;
     const a0 = Math.random() * Math.PI * 2;
     const isPink = Math.random() < pink;
     const base = isPink ? PINKS[Math.random() * PINKS.length | 0] : PALES[Math.random() * PALES.length | 0];
@@ -156,9 +157,9 @@
     const ring = (a, fd, fe, fn) => {
       const ca = Math.cos(a), sa = Math.sin(a);
       return [
-        r * ((u[0] * ca + v[0] * sa) * fd + (-u[0] * sa + v[0] * ca) * fe + n[0] * fn),
-        r * ((u[1] * ca + v[1] * sa) * fd + (-u[1] * sa + v[1] * ca) * fe + n[1] * fn),
-        r * ((u[2] * ca + v[2] * sa) * fd + (-u[2] * sa + v[2] * ca) * fe + n[2] * fn)];
+        r * ((u[0] * ca + v[0] * sa) * fd * sp + (-u[0] * sa + v[0] * ca) * fe * sp + n[0] * fn),
+        r * ((u[1] * ca + v[1] * sa) * fd * sp + (-u[1] * sa + v[1] * ca) * fe * sp + n[1] * fn),
+        r * ((u[2] * ca + v[2] * sa) * fd * sp + (-u[2] * sa + v[2] * ca) * fe * sp + n[2] * fn)];
     };
     // five rounded petals, each with the cleft tip of a cherry blossom
     for (let j = 0; j < 5; j++) {
@@ -178,29 +179,38 @@
   {
     const R = Math.random;
     for (let i = 0; i < 300; i++) {            // blade flats: pink near the spine, silver near the edge
-      const s = 0.04 + R() * (L - 0.06), top = bladeTop(s), bot = bladeBot(s), m = R(), side = R() < 0.5 ? -1 : 1;
+      const s = 0.2 + R() * (L - 0.22), top = bladeTop(s), bot = bladeBot(s), m = R(), side = R() < 0.5 ? -1 : 1;
       addBlossom(pt(s, bot + (top - bot) * m, side * 0.02), [0, 0, side], (0.085 + R() * 0.05) * (1 - tipQ(s) * 0.5), 0.12 + m * 0.85, s);
     }
     for (let i = 0; i < 70; i++) {            // spine
-      const s = 0.04 + R() * (L - 0.05), f = frame(s);
+      const s = 0.2 + R() * (L - 0.21), f = frame(s);
       addBlossom(pt(s, bladeTop(s), (R() - 0.5) * 0.04), [f.nx, f.ny, 0], (0.085 + R() * 0.05) * (1 - tipQ(s) * 0.5), 0.95, s);
     }
     for (let i = 0; i < 70; i++) {            // cutting edge
-      const s = 0.04 + R() * (L - 0.05), f = frame(s);
+      const s = 0.2 + R() * (L - 0.21), f = frame(s);
       addBlossom(pt(s, bladeBot(s), 0), [-f.nx, -f.ny, 0], (0.075 + R() * 0.045) * (1 - tipQ(s) * 0.5), 0.1, s);
     }
     for (let i = 0; i < 110; i++) {            // handle
-      const s = HANDLE + R() * (-0.05 - HANDLE), a = R() * Math.PI * 2, f = frame(s);
+      const s = HANDLE + R() * (-0.2 - HANDLE), a = R() * Math.PI * 2, f = frame(s);
       addBlossom(pt(s, Math.cos(a) * 0.075, Math.sin(a) * 0.05), [f.nx * Math.cos(a), f.ny * Math.cos(a), Math.sin(a)], 0.08 + R() * 0.045, i % 5 ? 0.9 : 0.2, s);
     }
     for (let i = 0; i < 18; i++) {             // pommel
       const f = frame(HANDLE);
       addBlossom(pt(HANDLE - 0.02, (R() - 0.5) * 0.1, (R() - 0.5) * 0.07), [-f.tx, -f.ty, 0], 0.05 + R() * 0.04, 0.5, HANDLE);
     }
-    for (let i = 0; i < 70; i++) {            // guard: faces and rim, larger and spikier
-      const a = R() * Math.PI * 2, rim = i % 3 === 0, rr = rim ? 0.25 : 0.09 + R() * 0.16, side = R() < 0.5 ? -1 : 1;
-      const p = pt(rim ? -0.008 : side < 0 ? -0.03 : 0.015, Math.cos(a) * rr, Math.sin(a) * rr);
-      addBlossom(p, rim ? [0, Math.cos(a), Math.sin(a)] : [side, 0, 0], 0.12 + R() * 0.07, 0.7, -0.01);
+    const RAYS = 13;                           // guard: sprays radiating from the collar, dark gaps between them
+    for (let k = 0; k < RAYS; k++) {
+      const a = (k + (R() - 0.5) * 0.5) / RAYS * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+      const len = k % 2 ? 0.3 + R() * 0.08 : 0.44 + R() * 0.12, lean = (R() - 0.5) * 0.1, steps = k % 2 ? 3 : 5;
+      for (let j = 0; j < steps; j++) {
+        const q = j / steps, rr = 0.15 + (len - 0.15) * q, side = (j + k) & 1 ? -1 : 1;
+        addBlossom(pt(-0.008 + lean * q + side * 0.012, ca * rr, sa * rr), [side, ca * 0.35, sa * 0.35], 0.08 - 0.035 * q + R() * 0.015, 0.75, -0.01);
+      }
+      addBlossom(pt(-0.008 + lean, ca * len, sa * len), [lean * 2, ca, sa], 0.085 + R() * 0.03, k % 3 ? 0.9 : 0.15, -0.01, true);
+    }
+    for (let i = 0; i < 10; i++) {             // collar blossoms on both faces of the tsuba
+      const a = i / 10 * Math.PI * 2, side = i & 1 ? -1 : 1;
+      addBlossom(pt(side < 0 ? -0.035 : 0.02, Math.cos(a) * 0.1, Math.sin(a) * 0.1), [side, Math.cos(a) * 0.4, Math.sin(a) * 0.4], 0.06 + R() * 0.02, 0.6, -0.01);
     }
   }
   raw.sort((a, b) => a.key - b.key);
